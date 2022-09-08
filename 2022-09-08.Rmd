@@ -1,0 +1,159 @@
+---
+title: "GSS wrangling practice"
+author: "Steve Vaisey"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+If you haven't already done so, be sure to install the `gssr` package.
+
+I am _excited_ to meet **you**. But ~~not you~~.
+
+```{r, eval=FALSE}
+remotes::install_github("kjhealy/gssr")
+```
+
+```{r}
+library(tidyverse)
+library(gssr)
+```
+
+I am going to get the 2018 data because Steve said so.
+
+```{r, cache=TRUE}
+d <- gss_get_yr(year = 2018)
+glimpse(d)
+```
+
+```{r}
+d %>% count(abany)
+d %>% select(abany) %>% table()
+d$abany %>% table()
+table(d$abany)
+```
+
+If we use a tibble, we can go directly to a graph! Yay!
+
+```{r}
+d %>% count(abany) %>% 
+  ggplot(mapping = aes(x = factor(abany),
+                       y = n)) +
+  geom_col()
+```
+
+Let's take another look at option order.
+
+```{r}
+abany_counts <- d %>% 
+  count(abany)
+
+# with explicit argument names
+ggplot(data = abany_counts,
+       mapping = aes(x = abany,
+                     y = n)) +
+  geom_col()
+
+# without explicit argument names
+ggplot(abany_counts,
+       aes(x = abany,
+           y = n)) +
+  geom_col()
+
+# without explicit arguments in wrong order
+# ggplot(aes(x = abany,
+#            y = n),
+#        abany_counts) +
+#   geom_col()
+
+# with explicit arguments in wrong order
+ggplot(mapping = aes(x = abany,
+           y = n),
+       data = abany_counts) +
+  geom_col()
+
+```
+
+Let's cut out the middleman.
+
+```{r}
+ggplot(d,
+       aes(x = abany)) +
+  geom_bar()
+```
+
+Base R vs. tidyverse "select".
+
+```{r}
+d["abany"]
+d %>% select(abany)
+```
+
+Let's attempt the documentation.
+
+```{r}
+data(gss_doc)
+
+gss_doc %>% 
+  filter(id == "abany") %>%
+  select(marginals) %>% 
+  unnest(cols = c(marginals))
+
+gss_doc %>% 
+  filter(id == "abany") %>% 
+  select(text)
+```
+
+```{r}
+# using case_when()
+d2 <- d %>%
+  select(sex, abany) %>%
+  haven::zap_labels() %>%
+  mutate(
+    sexchr = if_else(sex == 1,
+                     "Male",
+                     "Female"),
+    abok = case_when(abany == 1 ~ 1,
+                     abany == 2 ~ 0,
+                     TRUE ~ NA_real_)
+  )
+
+# equivalent using if_else()
+d2 <- d %>%
+  select(sex, abany) %>%
+  haven::zap_labels() %>%
+  mutate(sexchr = if_else(sex == 1,
+                          "Male",
+                          "Female"),
+         abok = if_else(abany == 1, 1, 0)) %>% 
+  select(sexchr, abok) %>% 
+  drop_na()
+```
+
+```{r}
+d2 %>% 
+  summarize(m_abok = mean(abok))
+
+ab_by_sex <- d2 %>%
+  group_by(sexchr) %>% 
+  summarize(m_abok = mean(abok),
+            n = n())
+
+ggplot(ab_by_sex,
+       aes(x = sexchr,
+           y = m_abok)) +
+  geom_bar(stat = "identity") +
+  theme_minimal() +
+  labs(title = "Support for abortion by respondent sex, 2018",
+       x = "",
+       y = "Proportion supporting abortion for any reason")
+
+ggplot(d2,
+       aes(x = abok,
+           group = sexchr)) +
+  geom_bar()
+
+```
